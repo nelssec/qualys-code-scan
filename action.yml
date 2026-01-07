@@ -1,0 +1,124 @@
+name: 'Qualys Code Scan'
+description: 'Scan code repositories for vulnerabilities using Qualys Software Composition Analysis (SCA)'
+author: 'Qualys'
+
+branding:
+  icon: 'code'
+  color: 'red'
+
+inputs:
+  qualys_access_token:
+    description: 'Qualys API access token from Container Security module'
+    required: true
+  qualys_pod:
+    description: 'Qualys platform POD (US1, US2, US3, US4, EU1, EU2, CA1, IN1, AU1, UK1, AE1, KSA1)'
+    required: true
+    default: 'US3'
+  scan_path:
+    description: 'Directory path to scan (defaults to repository root)'
+    required: false
+    default: ''
+  exclude_dirs:
+    description: 'Comma-separated directories to exclude from scan'
+    required: false
+    default: ''
+  exclude_files:
+    description: 'Comma-separated file patterns to exclude from scan'
+    required: false
+    default: ''
+  use_policy_evaluation:
+    description: 'Use Qualys cloud policy evaluation instead of local thresholds'
+    required: false
+    default: 'false'
+  policy_tags:
+    description: 'Comma-separated policy tags for cloud policy evaluation'
+    required: false
+    default: ''
+  max_critical:
+    description: 'Maximum allowed critical vulnerabilities (-1 for unlimited)'
+    required: false
+    default: '0'
+  max_high:
+    description: 'Maximum allowed high vulnerabilities (-1 for unlimited)'
+    required: false
+    default: '0'
+  max_medium:
+    description: 'Maximum allowed medium vulnerabilities (-1 for unlimited)'
+    required: false
+    default: '-1'
+  max_low:
+    description: 'Maximum allowed low vulnerabilities (-1 for unlimited)'
+    required: false
+    default: '-1'
+  scan_secrets:
+    description: 'Enable secrets detection in source code'
+    required: false
+    default: 'false'
+  offline_scan:
+    description: 'Perform offline scan without uploading to Qualys cloud'
+    required: false
+    default: 'false'
+  generate_sbom:
+    description: 'Generate Software Bill of Materials (SBOM)'
+    required: false
+    default: 'false'
+  sbom_format:
+    description: 'SBOM format (spdx, cyclonedx, or both)'
+    required: false
+    default: 'spdx'
+  scan_timeout:
+    description: 'Scan timeout in seconds'
+    required: false
+    default: '300'
+  upload_sarif:
+    description: 'Upload SARIF results to GitHub Security tab'
+    required: false
+    default: 'true'
+  continue_on_error:
+    description: 'Continue workflow even if vulnerabilities exceed thresholds'
+    required: false
+    default: 'false'
+  create_issues:
+    description: 'Create GitHub Issues for discovered vulnerabilities'
+    required: false
+    default: 'false'
+  issue_min_severity:
+    description: 'Minimum severity for issue creation (5=critical, 4=high, 3=medium, 2=low, 1=info)'
+    required: false
+    default: '4'
+  issue_labels:
+    description: 'Additional comma-separated labels for created issues'
+    required: false
+    default: ''
+  issue_assignees:
+    description: 'Comma-separated GitHub usernames to assign to created issues'
+    required: false
+    default: ''
+
+outputs:
+  vulnerability_count:
+    description: 'Total number of vulnerabilities found'
+  critical_count:
+    description: 'Number of critical vulnerabilities'
+  high_count:
+    description: 'Number of high vulnerabilities'
+  medium_count:
+    description: 'Number of medium vulnerabilities'
+  low_count:
+    description: 'Number of low vulnerabilities'
+  policy_result:
+    description: 'Policy evaluation result (ALLOW, DENY, AUDIT, or NONE)'
+  scan_passed:
+    description: 'Whether the scan passed threshold/policy checks (true/false)'
+  sarif_path:
+    description: 'Path to the generated SARIF report'
+  json_path:
+    description: 'Path to the generated JSON report'
+  sbom_path:
+    description: 'Path to generated SBOM files (if enabled)'
+  issues_created:
+    description: 'Number of GitHub Issues created'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
