@@ -69,7 +69,7 @@ async function run(): Promise<void> {
       scanTypes.push('secret');
     }
 
-    const formats: ('json' | 'sarif' | 'spdx' | 'cyclonedx')[] = ['json', 'sarif'];
+    const formats: ('json' | 'spdx' | 'cyclonedx')[] = ['json'];
     if (generateSbom) {
       if (sbomFormat === 'both') {
         formats.push('spdx', 'cyclonedx');

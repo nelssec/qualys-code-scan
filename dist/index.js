@@ -30912,7 +30912,7 @@ async function run() {
         if (scanSecrets) {
             scanTypes.push('secret');
         }
-        const formats = ['json', 'sarif'];
+        const formats = ['json'];
         if (generateSbom) {
             if (sbomFormat === 'both') {
                 formats.push('spdx', 'cyclonedx');
