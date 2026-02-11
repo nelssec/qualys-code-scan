@@ -37,6 +37,9 @@ async function run(): Promise<void> {
     const issueMinSeverity = core.getInput('issue_min_severity') || '4';
     const issueLabels = core.getInput('issue_labels') || '';
     const issueAssignees = core.getInput('issue_assignees') || '';
+    const maxNetworkRetries = parseInt(core.getInput('max_network_retries') || '30', 10);
+    const networkRetryWaitMin = parseInt(core.getInput('network_retry_wait_min') || '15', 10);
+    const networkRetryWaitMax = parseInt(core.getInput('network_retry_wait_max') || '30', 10);
 
     core.setSecret(accessToken);
 
@@ -92,6 +95,9 @@ async function run(): Promise<void> {
       timeout: scanTimeout,
       offlineScan,
       logLevel: core.isDebug() ? 'debug' : 'info',
+      maxNetworkRetries,
+      networkRetryWaitMin,
+      networkRetryWaitMax,
     };
 
     core.info('Starting code scan...');

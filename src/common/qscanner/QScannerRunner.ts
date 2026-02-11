@@ -284,9 +284,12 @@ export class QScannerRunner {
       args.push('--proxy', this.config.proxy);
     }
 
-    args.push('--max-network-retries', '15');
-    args.push('--network-retry-wait-min', '10s');
-    args.push('--network-retry-wait-max', '2m');
+    const maxRetries = options.maxNetworkRetries ?? 30;
+    const retryWaitMin = options.networkRetryWaitMin ?? 15;
+    const retryWaitMax = options.networkRetryWaitMax ?? 30;
+    args.push('--max-network-retries', maxRetries.toString());
+    args.push('--network-retry-wait-min', `${retryWaitMin}s`);
+    args.push('--network-retry-wait-max', `${retryWaitMax}s`);
 
     return args;
   }

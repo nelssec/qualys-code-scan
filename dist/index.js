@@ -30461,9 +30461,12 @@ class QScannerRunner {
         if (this.config.proxy) {
             args.push('--proxy', this.config.proxy);
         }
-        args.push('--max-network-retries', '15');
-        args.push('--network-retry-wait-min', '10s');
-        args.push('--network-retry-wait-max', '2m');
+        const maxRetries = options.maxNetworkRetries ?? 30;
+        const retryWaitMin = options.networkRetryWaitMin ?? 15;
+        const retryWaitMax = options.networkRetryWaitMax ?? 30;
+        args.push('--max-network-retries', maxRetries.toString());
+        args.push('--network-retry-wait-min', `${retryWaitMin}s`);
+        args.push('--network-retry-wait-max', `${retryWaitMax}s`);
         return args;
     }
     async executeQScanner(args, outputDir) {
@@ -30887,6 +30890,9 @@ async function run() {
         const issueMinSeverity = core.getInput('issue_min_severity') || '4';
         const issueLabels = core.getInput('issue_labels') || '';
         const issueAssignees = core.getInput('issue_assignees') || '';
+        const maxNetworkRetries = parseInt(core.getInput('max_network_retries') || '30', 10);
+        const networkRetryWaitMin = parseInt(core.getInput('network_retry_wait_min') || '15', 10);
+        const networkRetryWaitMax = parseInt(core.getInput('network_retry_wait_max') || '30', 10);
         core.setSecret(accessToken);
         core.info('='.repeat(60));
         core.info('Qualys Code Scan (SCA)');
@@ -30939,6 +30945,9 @@ async function run() {
             timeout: scanTimeout,
             offlineScan,
             logLevel: core.isDebug() ? 'debug' : 'info',
+            maxNetworkRetries,
+            networkRetryWaitMin,
+            networkRetryWaitMax,
         };
         core.info('Starting code scan...');
         const result = await runner.scanRepo(scanOptions);

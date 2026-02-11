@@ -94,6 +94,18 @@ inputs:
     description: 'Comma-separated GitHub usernames to assign to created issues'
     required: false
     default: ''
+  max_network_retries:
+    description: 'Maximum number of retries when fetching vulnerability report from Qualys cloud'
+    required: false
+    default: '30'
+  network_retry_wait_min:
+    description: 'Minimum wait time in seconds between report fetch retries'
+    required: false
+    default: '15'
+  network_retry_wait_max:
+    description: 'Maximum wait time in seconds between report fetch retries'
+    required: false
+    default: '30'
 
 outputs:
   vulnerability_count:

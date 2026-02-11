@@ -22,6 +22,9 @@ export interface RepoScanOptions extends QScannerOptions {
     excludeFiles?: string[];
     offlineScan?: boolean;
     showPerfStat?: boolean;
+    maxNetworkRetries?: number;
+    networkRetryWaitMin?: number;
+    networkRetryWaitMax?: number;
 }
 export declare enum QScannerExitCode {
     SUCCESS = 0,
