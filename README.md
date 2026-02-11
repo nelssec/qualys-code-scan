@@ -84,6 +84,9 @@ For individual repositories, create repository secrets and variables with the sa
 | `issue_min_severity` | No | `4` | Min severity for issues (5=critical, 4=high) |
 | `issue_labels` | No | - | Additional labels for issues |
 | `issue_assignees` | No | - | GitHub usernames to assign |
+| `max_network_retries` | No | `30` | Max retries for report fetching |
+| `network_retry_wait_min` | No | `15` | Min wait between retries (seconds) |
+| `network_retry_wait_max` | No | `30` | Max wait between retries (seconds) |
 
 ## Outputs
 
