@@ -106,6 +106,10 @@ inputs:
     description: 'Maximum wait time in seconds between report fetch retries'
     required: false
     default: '30'
+  debug:
+    description: 'Enable debug logging and performance stats'
+    required: false
+    default: 'false'
 
 outputs:
   vulnerability_count:

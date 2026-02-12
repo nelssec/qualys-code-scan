@@ -87,6 +87,7 @@ For individual repositories, create repository secrets and variables with the sa
 | `max_network_retries` | No | `30` | Max retries for report fetching |
 | `network_retry_wait_min` | No | `15` | Min wait between retries (seconds) |
 | `network_retry_wait_max` | No | `30` | Max wait between retries (seconds) |
+| `debug` | No | `false` | Enable debug logging and performance stats |
 
 ## Outputs
 

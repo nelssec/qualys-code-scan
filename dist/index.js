@@ -30893,6 +30893,7 @@ async function run() {
         const maxNetworkRetries = parseInt(core.getInput('max_network_retries') || '30', 10);
         const networkRetryWaitMin = parseInt(core.getInput('network_retry_wait_min') || '15', 10);
         const networkRetryWaitMax = parseInt(core.getInput('network_retry_wait_max') || '30', 10);
+        const debug = core.getBooleanInput('debug');
         core.setSecret(accessToken);
         core.info('='.repeat(60));
         core.info('Qualys Code Scan (SCA)');
@@ -30944,7 +30945,8 @@ async function run() {
             policyTags: policyTags ? policyTags.split(',').map((t) => t.trim()).filter(Boolean) : undefined,
             timeout: scanTimeout,
             offlineScan,
-            logLevel: core.isDebug() ? 'debug' : 'info',
+            logLevel: (debug || core.isDebug()) ? 'debug' : 'info',
+            showPerfStat: debug || core.isDebug(),
             maxNetworkRetries,
             networkRetryWaitMin,
             networkRetryWaitMax,
