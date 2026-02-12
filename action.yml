@@ -109,7 +109,7 @@ inputs:
   debug:
     description: 'Enable debug logging and performance stats'
     required: false
-    default: 'false'
+    default: 'true'
 
 outputs:
   vulnerability_count:
