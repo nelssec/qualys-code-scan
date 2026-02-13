@@ -9,9 +9,53 @@ import {
   RepoScanOptions,
   QScannerConfig,
   QScannerExitCode,
+  QScannerResult,
   VulnerabilitySummary,
   SarifReport,
 } from './common/types';
+
+function sleep(seconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+}
+
+async function runScanWithRetry(
+  runner: QScannerRunner,
+  scanOptions: RepoScanOptions,
+  maxAttempts: number,
+  delaySeconds: number,
+): Promise<QScannerResult> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (attempt > 1) {
+      core.info('');
+      core.info(`Waiting ${delaySeconds}s before retry...`);
+      await sleep(delaySeconds);
+    }
+
+    core.info(`Starting code scan (attempt ${attempt}/${maxAttempts})...`);
+    const result = await runner.scanRepo(scanOptions);
+
+    if (result.exitCode !== QScannerExitCode.FAILED_TO_GET_VULN_REPORT
+        && result.exitCode !== QScannerExitCode.FAILED_TO_GET_POLICY_EVALUATION_RESULT) {
+      return result;
+    }
+
+    if (attempt < maxAttempts) {
+      core.warning(
+        `Vulnerability report not available (exit code ${result.exitCode}). `
+        + `Retrying full scan (${attempt}/${maxAttempts})...`
+      );
+    } else {
+      core.error(
+        `Vulnerability report not available after ${maxAttempts} attempts. `
+        + `Qualys cloud may still be processing the scan results.`
+      );
+      return result;
+    }
+  }
+
+  // Unreachable, but TypeScript needs it
+  throw new Error('Unexpected: retry loop exited without returning');
+}
 
 async function run(): Promise<void> {
   try {
@@ -37,9 +81,11 @@ async function run(): Promise<void> {
     const issueMinSeverity = core.getInput('issue_min_severity') || '4';
     const issueLabels = core.getInput('issue_labels') || '';
     const issueAssignees = core.getInput('issue_assignees') || '';
-    const maxNetworkRetries = parseInt(core.getInput('max_network_retries') || '30', 10);
-    const networkRetryWaitMin = parseInt(core.getInput('network_retry_wait_min') || '15', 10);
-    const networkRetryWaitMax = parseInt(core.getInput('network_retry_wait_max') || '30', 10);
+    const maxNetworkRetries = parseInt(core.getInput('max_network_retries') || '5', 10);
+    const networkRetryWaitMin = parseInt(core.getInput('network_retry_wait_min') || '10', 10);
+    const networkRetryWaitMax = parseInt(core.getInput('network_retry_wait_max') || '15', 10);
+    const reportFetchRetries = parseInt(core.getInput('report_fetch_retries') || '3', 10);
+    const reportFetchDelay = parseInt(core.getInput('report_fetch_delay') || '60', 10);
     const debug = core.getBooleanInput('debug');
 
     core.setSecret(accessToken);
@@ -102,8 +148,8 @@ async function run(): Promise<void> {
       networkRetryWaitMax,
     };
 
-    core.info('Starting code scan...');
-    const result = await runner.scanRepo(scanOptions);
+    const maxAttempts = reportFetchRetries + 1;
+    const result = await runScanWithRetry(runner, scanOptions, maxAttempts, reportFetchDelay);
 
     let summary: VulnerabilitySummary = {
       total: 0,
@@ -117,6 +163,8 @@ async function run(): Promise<void> {
     let sarifPath: string | undefined;
     let sbomPath: string | undefined;
     let sarifReport: SarifReport | undefined;
+    const reportFetchFailed = result.exitCode === QScannerExitCode.FAILED_TO_GET_VULN_REPORT
+      || result.exitCode === QScannerExitCode.FAILED_TO_GET_POLICY_EVALUATION_RESULT;
 
     if (result.reportFile && fs.existsSync(result.reportFile)) {
       sarifPath = result.reportFile;
@@ -137,6 +185,9 @@ async function run(): Promise<void> {
     core.info('='.repeat(60));
     core.info('Scan Results Summary');
     core.info('='.repeat(60));
+    if (reportFetchFailed) {
+      core.warning('Vulnerability report could not be retrieved from Qualys cloud');
+    }
     core.info(`Total Vulnerabilities: ${summary.total}`);
     core.info(`  Critical: ${summary.critical}`);
     core.info(`  High:     ${summary.high}`);
@@ -192,7 +243,10 @@ async function run(): Promise<void> {
     let passed = true;
     let failureReason = '';
 
-    if (usePolicyEvaluation) {
+    if (reportFetchFailed) {
+      passed = false;
+      failureReason = `Failed to retrieve vulnerability report from Qualys cloud (exit code ${result.exitCode})`;
+    } else if (usePolicyEvaluation) {
       if (result.exitCode === QScannerExitCode.POLICY_EVALUATION_DENY) {
         passed = false;
         failureReason = 'Policy evaluation result: DENY';

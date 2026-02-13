@@ -84,9 +84,11 @@ For individual repositories, create repository secrets and variables with the sa
 | `issue_min_severity` | No | `4` | Min severity for issues (5=critical, 4=high) |
 | `issue_labels` | No | - | Additional labels for issues |
 | `issue_assignees` | No | - | GitHub usernames to assign |
-| `max_network_retries` | No | `30` | Max retries for report fetching |
-| `network_retry_wait_min` | No | `15` | Min wait between retries (seconds) |
-| `network_retry_wait_max` | No | `30` | Max wait between retries (seconds) |
+| `max_network_retries` | No | `5` | Max poll attempts per scan run |
+| `network_retry_wait_min` | No | `10` | Min wait between poll attempts (seconds) |
+| `network_retry_wait_max` | No | `15` | Max wait between poll attempts (seconds) |
+| `report_fetch_retries` | No | `3` | Full scan re-runs if report fetch fails |
+| `report_fetch_delay` | No | `60` | Seconds to wait before re-running scan |
 | `debug` | No | `true` | Enable debug logging and performance stats |
 
 ## Outputs

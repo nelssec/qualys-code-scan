@@ -95,17 +95,25 @@ inputs:
     required: false
     default: ''
   max_network_retries:
-    description: 'Maximum number of retries when fetching vulnerability report from Qualys cloud'
+    description: 'Maximum number of retries when polling for the vulnerability report within a single scan attempt'
     required: false
-    default: '30'
+    default: '5'
   network_retry_wait_min:
-    description: 'Minimum wait time in seconds between report fetch retries'
+    description: 'Minimum wait time in seconds between report poll attempts'
+    required: false
+    default: '10'
+  network_retry_wait_max:
+    description: 'Maximum wait time in seconds between report poll attempts'
     required: false
     default: '15'
-  network_retry_wait_max:
-    description: 'Maximum wait time in seconds between report fetch retries'
+  report_fetch_retries:
+    description: 'Number of times to re-run the full scan if the vulnerability report cannot be fetched from Qualys cloud'
     required: false
-    default: '30'
+    default: '3'
+  report_fetch_delay:
+    description: 'Seconds to wait before retrying the full scan when the vulnerability report fetch fails'
+    required: false
+    default: '60'
   debug:
     description: 'Enable debug logging and performance stats'
     required: false
