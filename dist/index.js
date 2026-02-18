@@ -30968,13 +30968,15 @@ async function run() {
                 formats.push('spdx');
             }
         }
-        const scanOptions = {
+        const validModes = ['inventory-only', 'scan-only', 'get-report', 'evaluate-policy'];
+        const explicitMode = scanMode && validModes.includes(scanMode)
+            ? scanMode
+            : null;
+        const defaultReportMode = usePolicyEvaluation ? 'evaluate-policy' : 'get-report';
+        const baseScanOptions = {
             scanPath: path.resolve(scanPath),
             excludeDirs: excludeDirs ? excludeDirs.split(',').map((d) => d.trim()).filter(Boolean) : undefined,
             excludeFiles: excludeFiles ? excludeFiles.split(',').map((f) => f.trim()).filter(Boolean) : undefined,
-            mode: scanMode && ['inventory-only', 'scan-only', 'get-report', 'evaluate-policy'].includes(scanMode)
-                ? scanMode
-                : usePolicyEvaluation ? 'evaluate-policy' : 'get-report',
             scanTypes,
             format: formats,
             reportFormat: ['sarif', 'json'],
@@ -30987,9 +30989,34 @@ async function run() {
             networkRetryWaitMin,
             networkRetryWaitMax,
         };
-        const skipReportFetch = scanOptions.mode === 'inventory-only' || scanOptions.mode === 'scan-only';
-        const maxAttempts = skipReportFetch ? 1 : reportFetchRetries + 1;
-        const result = await runScanWithRetry(runner, scanOptions, maxAttempts, reportFetchDelay);
+        let result;
+        if (explicitMode) {
+            // Explicit mode: run exactly what was requested
+            const scanOptions = { ...baseScanOptions, mode: explicitMode };
+            const skipReportFetch = explicitMode === 'inventory-only' || explicitMode === 'scan-only';
+            const maxAttempts = skipReportFetch ? 1 : reportFetchRetries + 1;
+            result = await runScanWithRetry(runner, scanOptions, maxAttempts, reportFetchDelay);
+        }
+        else {
+            // Default: inventory-only first (primes backend), then get-report/evaluate-policy
+            core.info('');
+            core.info('Phase 1: Uploading inventory to Qualys...');
+            const inventoryOptions = { ...baseScanOptions, mode: 'inventory-only' };
+            const inventoryResult = await runner.scanRepo(inventoryOptions);
+            if (inventoryResult.exitCode === types_1.QScannerExitCode.SUCCESS) {
+                core.info('Inventory uploaded successfully. Waiting 10s for backend processing...');
+                await sleep(10);
+            }
+            else {
+                core.warning(`Inventory upload exited with code ${inventoryResult.exitCode}, proceeding to report fetch...`);
+            }
+            core.info('');
+            core.info('Phase 2: Fetching vulnerability report...');
+            const reportOptions = { ...baseScanOptions, mode: defaultReportMode };
+            const maxAttempts = reportFetchRetries + 1;
+            result = await runScanWithRetry(runner, reportOptions, maxAttempts, reportFetchDelay);
+        }
+        const skipReportFetch = explicitMode === 'inventory-only' || explicitMode === 'scan-only';
         let summary = {
             total: 0,
             critical: 0,

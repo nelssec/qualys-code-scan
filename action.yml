@@ -15,7 +15,7 @@ inputs:
     required: true
     default: 'US3'
   scan_mode:
-    description: 'Scanner mode: get-report (default, upload + fetch vuln report), inventory-only (upload to Qualys, no report fetch), scan-only (local scan, no upload), evaluate-policy (cloud policy evaluation)'
+    description: 'Scanner mode override. Default (empty): runs inventory-only upload first, then fetches vuln report. Explicit values: inventory-only (upload only), scan-only (local only), get-report (upload + fetch), evaluate-policy (cloud policy).'
     required: false
     default: ''
   scan_path:
