@@ -14,6 +14,10 @@ inputs:
     description: 'Qualys platform POD (US1, US2, US3, US4, EU1, EU2, CA1, IN1, AU1, UK1, AE1, KSA1)'
     required: true
     default: 'US3'
+  scan_mode:
+    description: 'Scanner mode: get-report (default, upload + fetch vuln report), inventory-only (upload to Qualys, no report fetch), scan-only (local scan, no upload), evaluate-policy (cloud policy evaluation)'
+    required: false
+    default: ''
   scan_path:
     description: 'Directory path to scan (defaults to repository root)'
     required: false

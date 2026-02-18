@@ -61,6 +61,7 @@ async function run(): Promise<void> {
   try {
     const accessToken = core.getInput('qualys_access_token', { required: true });
     const pod = core.getInput('qualys_pod', { required: true });
+    const scanMode = core.getInput('scan_mode') || '';
     const scanPath = core.getInput('scan_path') || process.env.GITHUB_WORKSPACE || '.';
     const excludeDirs = core.getInput('exclude_dirs');
     const excludeFiles = core.getInput('exclude_files');
@@ -102,6 +103,7 @@ async function run(): Promise<void> {
       core.info(`Thresholds - Critical: ${maxCritical}, High: ${maxHigh}, Medium: ${maxMedium}, Low: ${maxLow}`);
     }
     core.info(`Offline Scan: ${offlineScan}`);
+    if (scanMode) core.info(`Scan Mode: ${scanMode}`);
     core.info(`Generate SBOM: ${generateSbom}`);
     core.info('='.repeat(60));
 
@@ -134,7 +136,9 @@ async function run(): Promise<void> {
       scanPath: path.resolve(scanPath),
       excludeDirs: excludeDirs ? excludeDirs.split(',').map((d) => d.trim()).filter(Boolean) : undefined,
       excludeFiles: excludeFiles ? excludeFiles.split(',').map((f) => f.trim()).filter(Boolean) : undefined,
-      mode: usePolicyEvaluation ? 'evaluate-policy' : 'get-report',
+      mode: scanMode && ['inventory-only', 'scan-only', 'get-report', 'evaluate-policy'].includes(scanMode)
+        ? scanMode as RepoScanOptions['mode']
+        : usePolicyEvaluation ? 'evaluate-policy' : 'get-report',
       scanTypes,
       format: formats,
       reportFormat: ['sarif', 'json'],
@@ -148,7 +152,8 @@ async function run(): Promise<void> {
       networkRetryWaitMax,
     };
 
-    const maxAttempts = reportFetchRetries + 1;
+    const skipReportFetch = scanOptions.mode === 'inventory-only' || scanOptions.mode === 'scan-only';
+    const maxAttempts = skipReportFetch ? 1 : reportFetchRetries + 1;
     const result = await runScanWithRetry(runner, scanOptions, maxAttempts, reportFetchDelay);
 
     let summary: VulnerabilitySummary = {
@@ -163,8 +168,9 @@ async function run(): Promise<void> {
     let sarifPath: string | undefined;
     let sbomPath: string | undefined;
     let sarifReport: SarifReport | undefined;
-    const reportFetchFailed = result.exitCode === QScannerExitCode.FAILED_TO_GET_VULN_REPORT
-      || result.exitCode === QScannerExitCode.FAILED_TO_GET_POLICY_EVALUATION_RESULT;
+    const reportFetchFailed = !skipReportFetch
+      && (result.exitCode === QScannerExitCode.FAILED_TO_GET_VULN_REPORT
+        || result.exitCode === QScannerExitCode.FAILED_TO_GET_POLICY_EVALUATION_RESULT);
 
     if (result.reportFile && fs.existsSync(result.reportFile)) {
       sarifPath = result.reportFile;
