@@ -1,0 +1,46 @@
+name: Update QScanner binary
+
+on:
+  workflow_dispatch:
+    inputs:
+      download_url:
+        description: 'Qualys download URL for the linux-amd64 qscanner tar.gz'
+        required: true
+      release_tag:
+        description: 'Release tag to upload assets to'
+        required: false
+        default: 'v1'
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download and verify QScanner from Qualys
+        run: |
+          curl -fsSL -o qscanner.tar.gz "${{ inputs.download_url }}"
+          mkdir extracted
+          tar -xzf qscanner.tar.gz -C extracted
+          expected=$(cat extracted/qscanner.sha256 | tr -d '[:space:]')
+          actual=$(sha256sum extracted/qscanner | awk '{print $1}')
+          if [ "$expected" != "$actual" ]; then
+            echo "Checksum mismatch: expected $expected, got $actual"
+            exit 1
+          fi
+          chmod +x extracted/qscanner
+          extracted/qscanner version || extracted/qscanner --version || true
+
+      - name: Package release assets
+        run: |
+          gzip -9 -c extracted/qscanner > qscanner.gz
+          sha256sum qscanner.gz | awk '{print $1}' > qscanner.sha256
+          ls -la qscanner.gz qscanner.sha256
+          cat qscanner.sha256
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ inputs.release_tag }}" qscanner.gz qscanner.sha256 --clobber --repo "${{ github.repository }}"
