@@ -30663,11 +30663,88 @@ const fs = __importStar(__nccwpck_require__(9896));
 const zlib = __importStar(__nccwpck_require__(3106));
 const core = __importStar(__nccwpck_require__(7484));
 const github = __importStar(__nccwpck_require__(3228));
+// GitHub's SARIF processor rejects any result that has no `message` — even
+// when the result has a `ruleId`, `message` is only conditionally optional
+// per the SARIF 2.1.0 schema and GitHub enforces it unconditionally. Qualys
+// qcscli intermittently emits findings with no `message` (rules whose catalog
+// entry lacks description text), which makes the upload fail with
+// "expected a result message" and leaves the repo's Security tab showing a
+// failed analysis. Patch every offending result (and its rule's
+// shortDescription, which GitHub uses as the fallback) before upload.
+function sanitizeSarifForGitHub(sarifContent) {
+    let report;
+    try {
+        report = JSON.parse(sarifContent);
+    }
+    catch {
+        // Not parseable — hand it to GitHub as-is and let it report the problem.
+        return sarifContent;
+    }
+    const ruleDescriptionText = (rule) => {
+        if (!rule)
+            return '';
+        const sd = rule.shortDescription;
+        const fd = rule.fullDescription;
+        for (const c of [sd?.text, fd?.text]) {
+            if (typeof c === 'string' && c.trim())
+                return c.trim();
+        }
+        return '';
+    };
+    const ruleAnyText = (rule) => {
+        const desc = ruleDescriptionText(rule);
+        if (desc)
+            return desc;
+        const name = rule?.name;
+        return typeof name === 'string' && name.trim() ? name.trim() : '';
+    };
+    let patched = 0;
+    for (const run of report.runs ?? []) {
+        const rules = run.tool?.driver?.rules;
+        const ruleById = new Map();
+        if (Array.isArray(rules)) {
+            for (const r of rules) {
+                if (r && typeof r.id === 'string')
+                    ruleById.set(r.id, r);
+            }
+        }
+        for (const result of run.results ?? []) {
+            const message = result.message;
+            if (typeof message?.text === 'string' && message.text.trim())
+                continue;
+            const ruleId = typeof result.ruleId === 'string' ? result.ruleId : '';
+            const rule = ruleById.get(ruleId);
+            let fallback = ruleAnyText(rule);
+            if (!fallback) {
+                const props = result.properties;
+                const pkg = typeof props?.packageName === 'string' ? props.packageName : '';
+                fallback = [ruleId, pkg].filter(Boolean).join(' - ') || 'Qualys qscanner finding';
+                patched++;
+                core.warning(`SARIF result${ruleId ? ` for rule "${ruleId}"` : ''} has no message; injecting fallback: "${fallback}"`);
+            }
+            else {
+                patched++;
+                core.warning(`SARIF result for rule "${ruleId}" has no message; using rule description as message`);
+            }
+            result.message = { text: fallback };
+            // GitHub also needs shortDescription on every referenced rule; if the
+            // rule itself is bare, give it one so the result can render.
+            if (rule && !ruleDescriptionText(rule)) {
+                rule.shortDescription = { text: fallback };
+            }
+        }
+    }
+    if (patched > 0) {
+        core.info(`Patched ${patched} SARIF result(s) missing a message before upload`);
+        return JSON.stringify(report);
+    }
+    return sarifContent;
+}
 async function uploadSarifToGitHub(sarifPath, token, ref, sha) {
     if (!fs.existsSync(sarifPath)) {
         throw new Error(`SARIF file not found: ${sarifPath}`);
     }
-    const sarifContent = fs.readFileSync(sarifPath, 'utf-8');
+    const sarifContent = sanitizeSarifForGitHub(fs.readFileSync(sarifPath, 'utf-8'));
     const compressed = zlib.gzipSync(Buffer.from(sarifContent, 'utf-8'));
     const base64Sarif = compressed.toString('base64');
     const octokit = github.getOctokit(token);
