@@ -11,6 +11,87 @@ import * as github from '@actions/github';
 // "expected a result message" and leaves the repo's Security tab showing a
 // failed analysis. Patch every offending result (and its rule's
 // shortDescription, which GitHub uses as the fallback) before upload.
+// GitHub's code-scanning ruleset merge protection ("Require code scanning
+// results") gates pull requests on an alert's *security severity* bucket
+// (critical/high/medium/low). GitHub derives that bucket solely from the
+// SARIF rule's `properties.security-severity` CVSS string — it never reads
+// qcscli's numeric `properties.severity` (Qualys 1-5 scale). qcscli omits
+// `security-severity`, so every Qualys alert lands on the Security tab with a
+// null security severity and the security_alerts_threshold knob can never
+// match. Map the Qualys 1-5 severity onto a CVSS-string `security-severity`
+// so GitHub buckets the alerts and merge protection can gate on them.
+//
+// Qualys severity (per the action's own counting in QScannerRunner):
+//   5 = critical, 4 = high, 3 = medium, 2 = low, 1 = informational.
+// We pick a representative CVSS score inside each GitHub band:
+//   critical (9.0-10.0) -> 9.8, high (7.0-8.9) -> 8.0,
+//   medium (4.0-6.9) -> 5.0, low (0.1-3.9) -> 2.0, info/none -> 0.0.
+function qualysSeverityToSecuritySeverity(severity: number | undefined): string | undefined {
+  switch (severity) {
+    case 5:
+      return '9.8'; // critical
+    case 4:
+      return '8.0'; // high
+    case 3:
+      return '5.0'; // medium
+    case 2:
+      return '2.0'; // low
+    case 1:
+      return '0.0'; // informational / none
+    default:
+      return undefined;
+  }
+}
+
+function injectSecuritySeverity(report: {
+  runs?: Array<{
+    tool?: { driver?: { name?: string; rules?: Array<Record<string, unknown>> } };
+    results?: Array<Record<string, unknown>>;
+  }>;
+}): number {
+  let injected = 0;
+
+  for (const run of report.runs ?? []) {
+    // Rules carry the authoritative numeric severity; stamp security-severity
+    // on each rule so GitHub buckets the rule, then mirror it onto results
+    // that don't resolve to a rule (GitHub falls back to the result's own
+    // properties when present).
+    const ruleSeverity = new Map<string, number>();
+    const rules = run.tool?.driver?.rules;
+    if (Array.isArray(rules)) {
+      for (const rule of rules) {
+        if (!rule || typeof rule.id !== 'string') continue;
+        const props = (rule.properties ??= {}) as Record<string, unknown>;
+        const sev = props.severity as number | undefined;
+        if (typeof sev === 'number') ruleSeverity.set(rule.id, sev);
+        if (typeof props['security-severity'] !== 'string') {
+          const mapped = qualysSeverityToSecuritySeverity(sev);
+          if (mapped !== undefined) {
+            props['security-severity'] = mapped;
+            injected++;
+          }
+        }
+      }
+    }
+
+    for (const result of run.results ?? []) {
+      const props = (result.properties ??= {}) as Record<string, unknown>;
+      if (typeof props['security-severity'] === 'string') continue;
+      let sev = props.severity as number | undefined;
+      if (typeof sev !== 'number' && typeof result.ruleId === 'string') {
+        sev = ruleSeverity.get(result.ruleId);
+      }
+      const mapped = qualysSeverityToSecuritySeverity(sev);
+      if (mapped !== undefined) {
+        props['security-severity'] = mapped;
+        injected++;
+      }
+    }
+  }
+
+  return injected;
+}
+
 function sanitizeSarifForGitHub(sarifContent: string): string {
   let report: {
     runs?: Array<{
@@ -23,6 +104,13 @@ function sanitizeSarifForGitHub(sarifContent: string): string {
   } catch {
     // Not parseable — hand it to GitHub as-is and let it report the problem.
     return sarifContent;
+  }
+
+  // Stamp CVSS-string security-severity (derived from Qualys 1-5 severity) so
+  // GitHub code-scanning rulesets can gate merges on critical/high/etc.
+  const sevInjected = injectSecuritySeverity(report);
+  if (sevInjected > 0) {
+    core.info(`Injected security-severity on ${sevInjected} SARIF rule(s)/result(s) for GitHub severity bucketing`);
   }
 
   const ruleDescriptionText = (rule: Record<string, unknown> | undefined): string => {
@@ -85,6 +173,10 @@ function sanitizeSarifForGitHub(sarifContent: string): string {
 
   if (patched > 0) {
     core.info(`Patched ${patched} SARIF result(s) missing a message before upload`);
+  }
+  // Re-serialize whenever we mutated the report — either via message patching
+  // or security-severity injection — otherwise the in-memory changes are lost.
+  if (patched > 0 || sevInjected > 0) {
     return JSON.stringify(report);
   }
   return sarifContent;
